@@ -8,14 +8,10 @@
       
       <!-- 中心区域：图表展示 -->
       <div class="charts-section">
-        <!-- 净值走势图 -->
+        <!-- 净值走势图 (含收益对比、回撤修复) -->
         <FundChart
           :netWorthTrend="processedNetWorthTrend"
           :acWorthTrend="processedAcWorthTrend"
-        />
-        
-        <!-- 累计收益率对比图 -->
-        <FundPerformanceComparison
           :grandTotal="fundDetail.grand_total"
         />
         
@@ -65,7 +61,6 @@
 import { ref, watch, computed } from 'vue'
 import FundBasicInfo from './FundBasicInfo.vue'
 import FundChart from './FundChart.vue'
-import FundPerformanceComparison from './FundPerformanceComparison.vue'
 import FundRankingTrend from './FundRankingTrend.vue'
 import FundAssetAllocation from './FundAssetAllocation.vue'
 import FundScaleChange from './FundScaleChange.vue'
@@ -76,7 +71,6 @@ export default {
   components: {
     FundBasicInfo,
     FundChart,
-    FundPerformanceComparison,
     FundRankingTrend,
     FundAssetAllocation,
     FundScaleChange

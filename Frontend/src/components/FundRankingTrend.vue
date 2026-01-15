@@ -13,7 +13,7 @@
                 <th>日期</th>
                 <th>排名</th>
                 <th>同类基金总数</th>
-                <th>排名百分比</th>
+                <th>击败同类</th>
               </tr>
             </thead>
             <tbody>
@@ -21,8 +21,8 @@
                 <td>{{ formatDate(item.x) }}</td>
                 <td class="rank-value">{{ item.y }}/{{ item.sc }}</td>
                 <td>{{ item.sc }}</td>
-                <td :class="getPercentClass(item.percent)">
-                  {{ item.percent }}%
+                <td :class="getPercentClass((1 - item.y / item.sc) * 100)">
+                  {{ ((1 - item.y / item.sc) * 100).toFixed(2) }}%
                 </td>
               </tr>
             </tbody>
@@ -84,9 +84,11 @@ export default {
       return new Date(timestamp).toLocaleDateString('zh-CN')
     }
 
-    const getPercentClass = (percent) => {
-      if (percent <= 20) return 'excellent'
-      if (percent <= 50) return 'good'
+    const getPercentClass = (defeatPercent) => {
+      // defeatPercent is 100 - rankPercent
+      // higher is better
+      if (defeatPercent >= 80) return 'excellent'
+      if (defeatPercent >= 50) return 'good'
       return 'normal'
     }
 
@@ -108,10 +110,11 @@ export default {
           formatter: (params) => {
             const dataIndex = params[0].dataIndex
             const item = combinedData.value[dataIndex]
+            const defeated = ((1 - item.y / item.sc) * 100).toFixed(2);
             return `
               <div style="font-weight: bold; margin-bottom: 8px;">${formatDate(item.x)}</div>
               <div>排名: <strong>${item.y}/${item.sc}</strong></div>
-              <div>百分比: <strong>${item.percent.toFixed(2)}%</strong></div>
+              <div>击败同类: <strong>${defeated}%</strong></div>
             `
           }
         },

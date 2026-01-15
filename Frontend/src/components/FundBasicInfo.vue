@@ -235,11 +235,11 @@ export default {
 }
 
 .positive {
-  color: #52c41a;
+  color: #ff6b6b; /* 上涨显示红色 */
 }
 
 .negative {
-  color: #ff4d4f;
+  color: #2ed573; /* 下跌显示绿色 */
 }
 
 .loading {

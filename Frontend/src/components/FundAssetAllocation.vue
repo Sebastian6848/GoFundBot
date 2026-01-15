@@ -10,18 +10,20 @@
           <table>
             <thead>
               <tr>
-                <th>资产类型</th>
-                <th v-for="(date, index) in categories" :key="index">{{ date }}</th>
+                <th style="min-width: 100px;">时间</th>
+                <th v-for="(serie, index) in series" :key="index" style="text-align: center; min-width: 100px;">
+                  <div class="type-cell" style="justify-content: center;">
+                    <span class="type-dot" :style="{ background: getColor(index) }"></span>
+                    {{ serie.name }}
+                  </div>
+                </th>
               </tr>
             </thead>
             <tbody>
-              <tr v-for="(serie, index) in series" :key="index">
-                <td class="type-cell">
-                  <span class="type-dot" :style="{ background: getColor(index) }"></span>
-                  {{ serie.name }}
-                </td>
-                <td v-for="(value, idx) in serie.data" :key="idx" class="value-cell">
-                  {{ formatValue(value, serie.name) }}
+              <tr v-for="(date, dateIndex) in categories" :key="dateIndex">
+                <td style="font-weight: bold;">{{ date }}</td>
+                <td v-for="(serie, index) in series" :key="index" class="value-cell">
+                  {{ formatValue(serie.data[dateIndex], serie.name) }}
                 </td>
               </tr>
             </tbody>
@@ -86,6 +88,11 @@ export default {
           data: serie.data,
           itemStyle: {
             color: getColor(index)
+          },
+          label: {
+            show: true,
+            position: 'inside', 
+            formatter: (p) => p.value > 5 ? p.value + '%' : '' // Show label if wide enough
           }
         }))
 
@@ -94,13 +101,13 @@ export default {
       const lineSeries = netAssetSerie ? [{
         name: '净资产',
         type: 'line',
-        yAxisIndex: 1,
+        yAxisIndex: 1, // 使用右侧Y轴
         data: netAssetSerie.data,
         itemStyle: {
           color: '#ee6666'
         },
         lineStyle: {
-          width: 3
+            width: 3
         },
         symbol: 'circle',
         symbolSize: 8
@@ -126,34 +133,34 @@ export default {
         },
         legend: {
           data: series.value.map(s => s.name),
-          bottom: 0
+          bottom: 0,
+          type: 'scroll'
         },
         grid: {
           left: '3%',
-          right: '4%',
-          bottom: '15%',
-          top: '10%',
+          right: '5%',
+          bottom: '10%',
+          top: '15%',
           containLabel: true
         },
         xAxis: {
           type: 'category',
-          data: categories.value
+          data: categories.value,
+          boundaryGap: true
         },
         yAxis: [
-          {
-            type: 'value',
-            name: '占净值比(%)',
-            axisLabel: {
-              formatter: '{value}%'
+            {
+                type: 'value',
+                axisLabel: { formatter: '{value}%' },
+                splitLine: { show: true }
+            },
+            {
+                type: 'value',
+                name: '净资产(亿)',
+                position: 'right',
+                axisLabel: { formatter: '{value}' },
+                splitLine: { show: false }
             }
-          },
-          {
-            type: 'value',
-            name: '净资产(亿)',
-            axisLabel: {
-              formatter: '{value}亿'
-            }
-          }
         ],
         series: [...barSeries, ...lineSeries]
       }

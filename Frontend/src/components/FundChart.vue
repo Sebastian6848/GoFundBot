@@ -10,6 +10,13 @@
       </div>
       <div 
         class="tab-item" 
+        :class="{ active: activeTab === 'comparison' }"
+        @click="switchTab('comparison')"
+      >
+        收益对比
+      </div>
+      <div 
+        class="tab-item" 
         :class="{ active: activeTab === 'drawdown' }"
         @click="switchTab('drawdown')"
       >
@@ -24,10 +31,9 @@
             <br>
             <span class="value" :class="getColor(fundChange)">{{ fundChange > 0 ? '+' : ''}}{{ fundChange }}%</span>
         </div>
-        <!-- Placeholder for standard/benchmark if data exists -->
     </div>
     
-    <div class="summary-info drawdown-info" v-if="activeTab === 'drawdown'">
+    <div class="summary-info drawdown-info" v-else-if="activeTab === 'drawdown'">
         <div class="info-group">
             <div class="legend-dot-row">
                 <span class="legend-line green"></span>
@@ -40,7 +46,17 @@
                 <span class="legend-box pink"></span>
                 <span class="label">最大回撤修复天数</span>
              </div>
-             <div class="value-row">{{ maxDrawdownInfo.days ? maxDrawdownInfo.days + '天' : '--' }}</div>
+             <div class="value-row">{{ maxDrawdownInfo.days ? maxDrawdownInfo.days + '天' : '正在修复中...' }}</div>
+        </div>
+    </div>
+
+    <div class="summary-info comparison-info" v-else-if="activeTab === 'comparison'">
+        <div class="info-group" v-for="item in comparisonInfo" :key="item.name">
+             <div class="legend-dot-row">
+                <span class="legend-dot" :style="{ background: item.color, width: '12px', height: '3px' }"></span>
+                <span class="label" style="margin-left: 4px;">{{ item.name }}</span>
+             </div>
+             <!-- Optional: Add value at end of period? -->
         </div>
     </div>
 
@@ -63,7 +79,7 @@
 </template>
 
 <script>
-import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import * as echarts from 'echarts'
 
 export default {
@@ -74,6 +90,10 @@ export default {
       default: () => []
     },
     acWorthTrend: {
+      type: Array,
+      default: () => []
+    },
+    grandTotal: {
       type: Array,
       default: () => []
     }
@@ -99,7 +119,13 @@ export default {
     
     const switchTab = (tab) => {
         activeTab.value = tab
-        updateChart()
+        nextTick(() => {
+            if (chartInstance) {
+                chartInstance.dispose();
+                chartInstance = null;
+            }
+            initChart();
+        })
     }
 
     const getColor = (val) => {
@@ -110,120 +136,145 @@ export default {
     // Computed properties for summary
     const fundChange = ref('0.00')
     const maxDrawdownInfo = ref({ val: '0.00', days: 0 })
+    const comparisonInfo = ref([])
+
+    const filterByDate = (data, range) => {
+        if (!data || data.length === 0) return []
+        const now = new Date()
+        let startDate = new Date(0)
+
+        if (range === '3m') {
+            startDate = new Date(now.setMonth(now.getMonth() - 3))
+        } else if (range === '6m') {
+            startDate = new Date(now.setMonth(now.getMonth() - 6))
+        } else if (range === '1y') {
+            startDate = new Date(now.setFullYear(now.getFullYear() - 1))
+        } else if (range === '3y') {
+            startDate = new Date(now.setFullYear(now.getFullYear() - 3))
+        }
+        
+        return data.filter(item => item[0] >= startDate.getTime())
+    }
 
     const processData = () => {
-      if (!props.netWorthTrend.length) return { netWorth: [], drawdownInfo: null }
+        const rawData = (props.netWorthTrend || []).map(item => [item.x, item.y]);
+        const filtered = filterByDate(rawData, selectedRange.value);
+        
+        if (filtered.length === 0) return { netWorth: [], drawdownInfo: null }
 
-      const now = new Date()
-      let startDate = new Date(0)
+        const startVal = filtered[0][1]
+        const endVal = filtered[filtered.length - 1][1]
+        fundChange.value = startVal !== 0 ? ((endVal - startVal) / startVal * 100).toFixed(2) : '0.00'
 
-      if (selectedRange.value === '3m') {
-        startDate = new Date(now.setMonth(now.getMonth() - 3))
-      } else if (selectedRange.value === '6m') {
-        startDate = new Date(now.setMonth(now.getMonth() - 6))
-      } else if (selectedRange.value === '1y') {
-        startDate = new Date(now.setFullYear(now.getFullYear() - 1))
-      } else if (selectedRange.value === '3y') {
-        startDate = new Date(now.setFullYear(now.getFullYear() - 3))
-      }
+        // Prepare Percentage Data
+        const toPercent = (val) => startVal !== 0 ? parseFloat(((val - startVal) / startVal * 100).toFixed(2)) : 0
+        const percentTrend = filtered.map(item => [item[0], toPercent(item[1])])
 
-      // Filter Data
-      const filtered = props.netWorthTrend.filter(item => item.x >= startDate.getTime())
-      
-      if (filtered.length === 0) return { netWorth: [], drawdownInfo: null }
+        // Calculate Max Drawdown & Recovery
+        let curMaxdd = 0;
+        let globalPeakIndex = 0;
+        let globalValleyIndex = 0;
+        
+        let runningPeakValue = -Infinity;
+        let runningPeakIndex = 0;
+        
+        for (let i = 0; i < filtered.length; i++) {
+            const val = filtered[i][1];
+            if (val > runningPeakValue) {
+                runningPeakValue = val;
+                runningPeakIndex = i;
+            }
+            
+            const dd = (runningPeakValue - val) / runningPeakValue;
+            if (dd > curMaxdd) {
+                curMaxdd = dd;
+                globalPeakIndex = runningPeakIndex;
+                globalValleyIndex = i;
+            }
+        }
+        
+        // Check Recovery
+        let recoveryIndex = -1;
+        const peakValRaw = filtered[globalPeakIndex][1];
+        
+        for (let i = globalPeakIndex + 1; i < filtered.length; i++) {
+            if (filtered[i][1] >= peakValRaw) {
+                recoveryIndex = i;
+                break;
+            }
+        }
+        
+        const peakDate = filtered[globalPeakIndex][0];
+        const valleyDate = filtered[globalValleyIndex][0];
+        const recoveryDate = recoveryIndex !== -1 ? filtered[recoveryIndex][0] : null;
+        
+        const days = recoveryDate ? Math.ceil((recoveryDate - peakDate) / (1000 * 3600 * 24)) : null;
 
-      // Calculate Fund Change %
-      const startVal = filtered[0].y
-      const endVal = filtered[filtered.length - 1].y
-      fundChange.value = ((endVal - startVal) / startVal * 100).toFixed(2)
+        const ddInfo = {
+            val: (curMaxdd * 100).toFixed(2),
+            peakDate,
+            valleyDate,
+            recoveryDate,
+            days,
+            peakValue: toPercent(peakValRaw),
+            valleyValue: toPercent(filtered[globalValleyIndex][1]),
+            recoveryValue: recoveryIndex !== -1 ? toPercent(filtered[recoveryIndex][1]) : null
+        }
 
-      // Calculate Max Drawdown & Recovery
-      // Logic: Iterate to find the (Peak -> Valley) that gives Max Drawdown
-      // Then find recovery from that specific Peak
-      
-      let curMaxdd = 0;
-      let globalPeakIndex = 0;
-      let globalValleyIndex = 0;
-      
-      let runningPeakValue = -Infinity;
-      let runningPeakIndex = 0;
-      
-      for (let i = 0; i < filtered.length; i++) {
-          const val = filtered[i].y;
-          if (val > runningPeakValue) {
-              runningPeakValue = val;
-              runningPeakIndex = i;
-          }
-          
-          const dd = (runningPeakValue - val) / runningPeakValue;
-          if (dd > curMaxdd) {
-              curMaxdd = dd;
-              globalPeakIndex = runningPeakIndex;
-              globalValleyIndex = i;
-          }
-      }
-      
-      // Check Recovery
-      let recoveryIndex = -1;
-      const peakVal = filtered[globalPeakIndex].y;
-      
-      // Look for recovery AFTER the valley? Or AFTER the peak?
-      // "Recovery Period" usually starts from Drawdown start (Peak).
-      // Find first point > peakVal after peakIndex
-      for (let i = globalPeakIndex + 1; i < filtered.length; i++) {
-          if (filtered[i].y >= peakVal) {
-              recoveryIndex = i;
-              break;
-          }
-      }
-      
-      const peakDate = filtered[globalPeakIndex].x;
-      const valleyDate = filtered[globalValleyIndex].x;
-      const recoveryDate = recoveryIndex !== -1 ? filtered[recoveryIndex].x : null;
-      
-      const days = recoveryDate ? Math.ceil((recoveryDate - peakDate) / (1000 * 3600 * 24)) : null;
-
-      const ddInfo = {
-          val: (curMaxdd * 100).toFixed(2),
-          peakDate,
-          valleyDate,
-          recoveryDate,
-          days,
-          peakValue: peakVal,
-          valleyValue: filtered[globalValleyIndex].y,
-          recoveryValue: recoveryIndex !== -1 ? filtered[recoveryIndex].y : null
-      }
-      
-      maxDrawdownInfo.value = ddInfo
-      
-      return {
-        netWorth: filtered.map(item => [item.x, item.y]),
-        drawdownInfo: ddInfo
-      }
+        
+        maxDrawdownInfo.value = ddInfo
+        
+        // Also process Comparison Data just in case we need to filter for Comparison Tab?
+        // Usually comparison tab shows "All" or follows the range selector if enabled. 
+        // User requirements usually imply comparison follows standard range or all. 
+        // But the range selector is hidden for comparison in template: v-if="activeTab !== 'comparison'"
+        
+        return {
+            netWorth: percentTrend,
+            drawdownInfo: ddInfo
+        }
     }
 
     const initChart = () => {
       if (!chartEl.value) return
-      
-      chartInstance = echarts.init(chartEl.value)
+      if (!chartInstance) {
+          chartInstance = echarts.init(chartEl.value)
+      }
       updateChart()
     }
 
     const updateChart = () => {
       if (!chartInstance) return
 
-      const { netWorth, drawdownInfo } = processData()
-      
-      // Common Options
+      chartInstance.clear(); 
+
       const option = {
-        grid: { left: '3%', right: '5%', bottom: '3%', top: '10%', containLabel: true },
-        tooltip: { trigger: 'axis' },
+        grid: { left: '3%', right: '5%', bottom: '10%', top: '15%', containLabel: true },
+        tooltip: { 
+            trigger: 'axis',
+            formatter: function (params) {
+                let res = '<div>' + echarts.format.formatTime('yyyy-MM-dd', params[0].value[0]) + '</div>'
+                params.forEach(item => {
+                    let val = item.value[1];
+                    // If comparison, values are usually percents.
+                    // If net worth, values are currency.
+                    res += `<div>${item.marker} ${item.seriesName}: ${val}${activeTab.value === 'comparison' ? '%' : ''}</div>`
+                })
+                return res;
+            }
+        },
         xAxis: { type: 'time', boundaryGap: false, axisLine: { show: false }, axisTick: { show: false } },
-        yAxis: { type: 'value', scale: true, splitLine: { lineStyle: { type: 'dashed' } } },
+        yAxis: { 
+            type: 'value', 
+            scale: true, 
+            splitLine: { lineStyle: { type: 'dashed' } },
+            axisLabel: { formatter: '{value}%' }
+        },
         series: []
       }
-      
+
       if (activeTab.value === 'performance') {
+          const { netWorth } = processData()
           option.series.push({
               name: '本基金',
               type: 'line',
@@ -238,81 +289,135 @@ export default {
                   ])
               }
           })
-      } else {
-          // Drawdown View
-          const seriesData = {
-              name: '本基金',
-              type: 'line',
-              data: netWorth,
-              smooth: true,
-              symbol: 'none',
-              lineStyle: { width: 2, color: '#88aaff' }, // Lighter blue
-              markArea: {
-                  itemStyle: { color: 'rgba(255, 230, 230, 0.6)' }, // Light Pink
-                  data: []
-              },
-              markPoint: {
-                  symbol: 'circle',
-                  symbolSize: 8,
-                  label: {
-                      show: true,
-                      position: 'top',
-                      color: '#fff',
-                      padding: [4, 8],
-                      borderRadius: 4
-                  },
-                  data: []
+          
+          option.tooltip.formatter = function (params) {
+              let res = '<div>' + echarts.format.formatTime('yyyy-MM-dd', params[0].value[0]) + '</div>'
+              params.forEach(item => {
+                  res += `<div>${item.marker} ${item.seriesName}: ${item.value[1]}%</div>`
+              })
+              return res;
+          }
+      } else if (activeTab.value === 'comparison') {
+          const comparisonData = props.grandTotal || []
+          
+          if (comparisonData.length > 0) {
+              const colors = ['#007bff', '#91cc75', '#fac858', '#ee6666', '#5470c6'];
+              
+              // Update Legend Info
+              comparisonInfo.value = comparisonData.map((item, index) => ({
+                  name: item.name,
+                  color: colors[index % colors.length]
+              }))
+
+              const series = comparisonData.map((item, index) => {
+                  const rawData = item.data || [];
+                  const filteredData = filterByDate(rawData, selectedRange.value);
+                  
+                  return {
+                    name: item.name,
+                    type: 'line',
+                    data: filteredData, 
+                    smooth: true,
+                    symbol: 'none',
+                    lineStyle: { 
+                        width: item.name.includes('本基金') ? 3 : 1.5
+                    },
+                    itemStyle: {
+                        color: colors[index % colors.length]
+                    },
+                    z: item.name.includes('本基金') ? 3 : 2
+                 }
+              });
+              
+              option.series = series
+              option.legend = { show: false } // Hide internal legend
+              
+              // Adjust tooltip for comparison to show %
+              option.tooltip.formatter = function (params) {
+                  let res = '<div>' + echarts.format.formatTime('yyyy-MM-dd', params[0].value[0]) + '</div>'
+                  params.forEach(item => {
+                      res += `<div>
+                        <span style="display:inline-block;margin-right:5px;border-radius:50%;width:10px;height:10px;background-color:${item.color};"></span>
+                        ${item.seriesName}: ${item.value[1]}%
+                      </div>`
+                  })
+                  return res;
               }
           }
+      } else if (activeTab.value === 'drawdown') {
+          const { netWorth, drawdownInfo } = processData()
           
-          if (drawdownInfo && drawdownInfo.peakDate) {
-              const endDate = drawdownInfo.recoveryDate || netWorth[netWorth.length - 1][0];
+          if (netWorth.length > 0) {
+              const seriesData = {
+                  name: '本基金',
+                  type: 'line',
+                  data: netWorth,
+                  smooth: true,
+                  symbol: 'none',
+                  lineStyle: { width: 2, color: '#88aaff' },
+                  markArea: {
+                      itemStyle: { color: 'rgba(255, 230, 230, 0.6)' },
+                      data: []
+                  },
+                  markPoint: {
+                      symbol: 'circle',
+                      symbolSize: 8,
+                      label: {
+                          show: true,
+                          color: '#fff',
+                          padding: [4, 8],
+                          borderRadius: 4
+                      },
+                      data: []
+                  }
+              }
               
-              // Mark Area: Peak to Recovery (or End)
-              seriesData.markArea.data.push([
-                  { xAxis: drawdownInfo.peakDate },
-                  { xAxis: endDate }
-              ]);
-              
-              const points = [];
-              
-              // 1. Tag at Valley: "Max Drawdown X%"
-               points.push({
-                   xAxis: drawdownInfo.valleyDate,
-                   yAxis: drawdownInfo.valleyValue,
-                   itemStyle: { color: '#00bfa5' }, // Green dot
-                   label: {
-                       offset: [0, 15],
-                       formatter: `最大回撤${drawdownInfo.val}%`,
-                       backgroundColor: '#00bfa5',
-                       position: 'bottom'
-                   }
-               });
-               
-               // 2. Tag at Recovery (or in middle if recovery): "X Days Recovery"
-               if (drawdownInfo.recoveryDate) {
-                   // Middle point for the label? Or at the red line?
-                   // Screenshot has "36 Days Recovery" in a Red Box pointing to the area/line.
-                   // We put it at the end (Recovery point).
-                   points.push({
-                       xAxis: drawdownInfo.recoveryDate,
-                       yAxis: drawdownInfo.recoveryValue,
-                       itemStyle: { color: '#ff5252' }, // Red dot
+              if (drawdownInfo && drawdownInfo.peakDate) {
+                  const endDate = drawdownInfo.recoveryDate || netWorth[netWorth.length - 1][0];
+                  
+                  seriesData.markArea.data.push([
+                      { xAxis: drawdownInfo.peakDate },
+                      { xAxis: endDate }
+                  ]);
+                  
+                  const points = [];
+                  points.push({
+                      coord: [drawdownInfo.peakDate, drawdownInfo.peakValue],
+                      itemStyle: { color: '#ff9800' }, 
+                      label: { show: false } 
+                  });
+                   
+                  points.push({
+                       coord: [drawdownInfo.valleyDate, drawdownInfo.valleyValue],
+                       itemStyle: { color: '#00bfa5' },
                        label: {
-                           offset: [0, -15],
-                           formatter: `${drawdownInfo.days}天修复`,
-                           backgroundColor: '#ff5252',
+                           offset: [0, 15],
+                           formatter: `最大回撤${drawdownInfo.val}%`,
+                           backgroundColor: '#00bfa5',
+                           position: 'top'
                        }
-                   });
-               }
-               
-               seriesData.markPoint.data = points;
+                  });
+                   
+                  if (drawdownInfo.recoveryDate) {
+                       points.push({
+                           coord: [drawdownInfo.recoveryDate, drawdownInfo.recoveryValue],
+                           itemStyle: { color: '#ff5252' },
+                           label: {
+                               offset: [0, -15],
+                               formatter: `${drawdownInfo.days}天修复`,
+                               backgroundColor: '#ff5252',
+                               position: 'bottom'
+                           }
+                       });
+                  }
+                   
+                  seriesData.markPoint.data = points;
+              }
+              option.series.push(seriesData)
           }
-          
-          option.series.push(seriesData);
       }
 
-      chartInstance.setOption(option, true) // true = not merge, replace
+      chartInstance.setOption(option)
     }
 
     onMounted(() => {
@@ -327,10 +432,10 @@ export default {
       window.removeEventListener('resize', () => chartInstance?.resize())
     })
 
-    watch(() => props.netWorthTrend, () => {
-      updateChart()
+    watch([() => props.netWorthTrend, () => props.grandTotal], () => {
+      nextTick(() => updateChart()) 
     }, { deep: true })
-
+    
     return {
       chartEl,
       timeRanges,
@@ -340,6 +445,7 @@ export default {
       switchTab,
       fundChange,
       maxDrawdownInfo,
+      comparisonInfo,
       getColor
     }
   }
@@ -350,10 +456,13 @@ export default {
 .fund-chart-card {
   background: white;
   border-radius: 12px;
-  box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
   overflow: hidden;
   padding-bottom: 10px;
+  position: relative;
+  min-height: 400px;
+  margin-bottom: 24px;
 }
 
 .top-tabs {

@@ -218,11 +218,11 @@ export default {
 }
 
 .mom-value.positive {
-  color: #52c41a;
+  color: #ff4d4f;
 }
 
 .mom-value.negative {
-  color: #ff4d4f;
+  color: #52c41a;
 }
 
 .no-data {

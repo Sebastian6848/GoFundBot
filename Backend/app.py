@@ -33,19 +33,9 @@ def get_fund_detail(fund_code):
     if not fund_code:
         return jsonify({"error": "Fund code is required"}), 400
     
-    # 首先检查数据库是否有缓存
     db = next(get_db())
-    cached_fund = db.query(FundDetail).filter(FundDetail.fund_code == fund_code).first()
     
-    if cached_fund:
-        # 返回缓存数据
-        try:
-            data = json.loads(cached_fund.data_json)
-            return jsonify(data)
-        except:
-            pass
-    
-    # 从API获取数据
+    # 直接从API获取最新数据
     detail_data = fund_api.get_fund_detail(fund_code)
     basic_info = fund_api.get_fund_basic_info(fund_code)
     
@@ -53,7 +43,10 @@ def get_fund_detail(fund_code):
         # 合并数据
         detail_data['basic_info'] = basic_info
         
-        # 缓存到数据库或更新现有记录
+        # 检查数据库是否存在记录
+        cached_fund = db.query(FundDetail).filter(FundDetail.fund_code == fund_code).first()
+        
+        # 更新或新增记录
         if cached_fund:
             cached_fund.data_json = json.dumps(detail_data, ensure_ascii=False)
             cached_fund.net_worth_trend = json.dumps(detail_data.get('net_worth_trend', []), ensure_ascii=False)
@@ -67,11 +60,24 @@ def get_fund_detail(fund_code):
             )
             db.add(fund_detail)
         
-        db.commit()
+        try:
+            db.commit()
+        except Exception as e:
+            print(f"Error saving to database: {e}")
+            db.rollback()
         
         return jsonify(detail_data)
-    else:
-        return jsonify({"error": "Fund not found"}), 404
+    
+    # 如果API获取失败，尝试从数据库获取缓存数据作为兜底
+    cached_fund = db.query(FundDetail).filter(FundDetail.fund_code == fund_code).first()
+    if cached_fund:
+        try:
+            data = json.loads(cached_fund.data_json)
+            return jsonify(data)
+        except:
+            pass
+
+    return jsonify({"error": "Fund not found"}), 404
 
 @app.route('/api/fund/<fund_code>/basic', methods=['GET'])
 def get_fund_basic(fund_code):
