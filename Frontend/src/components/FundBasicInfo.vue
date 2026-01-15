@@ -1,7 +1,7 @@
 <template>
   <div v-if="fundInfo" class="fund-basic-info">
     <div class="info-header">
-      <h2>{{ fundInfo.fund_name || '未知基金' }}</h2>
+      <h2>{{ fundInfo.name || fundInfo.fund_name || '未知基金' }}</h2>
       <span class="fund-code">{{ fundCode }}</span>
     </div>
     

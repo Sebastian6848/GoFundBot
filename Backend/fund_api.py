@@ -11,8 +11,7 @@ class FundAPI:
     
     def get_fund_basic_info(self, fund_code):
         """
-        获取基金综合信息，包括实时估值、基本资料、持仓等�?
-        参�?DataProcess.py 中的实现
+        获取基金综合信息，包括实时估值、基本资料、持仓等
         """
         info = {}
         
@@ -49,7 +48,7 @@ class FundAPI:
                 if rate_match:
                     info['fund_rate'] = rate_match.group(1)
 
-                # 最小申购金�?
+                # 最小申购金额
                 min_match = re.search(r'var fund_minsg\s*=\s*"(.*?)";', content)
                 if min_match:
                     info['fund_min_subscription'] = min_match.group(1)

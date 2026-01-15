@@ -31,10 +31,12 @@
         <div class="section">
           <h3>基金基础信息</h3>
           <div v-if="fundDetail.basic_info" class="basic-info-grid">
-            <div class="info-row" v-for="(value, key) in fundDetail.basic_info" :key="key">
-              <span class="info-label">{{ formatKey(key) }}:</span>
-              <span class="info-value">{{ value || '--' }}</span>
-            </div>
+            <template v-for="(value, key) in fundDetail.basic_info" :key="key">
+              <div class="info-row" v-if="filterBasicInfo(key, value)">
+                <span class="info-label">{{ formatKey(key) }}:</span>
+                <span class="info-value">{{ value || '--' }}</span>
+              </div>
+            </template>
           </div>
           <div v-else class="no-data">暂无基础信息</div>
         </div>
@@ -178,6 +180,7 @@ export default {
       const keyMap = {
         'fund_code': '基金代码',
         'fund_name': '基金名称',
+        'name': '基金名称',
         'fund_name_en': '英文名称',
         'fund_type': '基金类型',
         'purchase_rate': '申购费率',
@@ -190,9 +193,25 @@ export default {
         'latest_scale': '最新规模',
         'investment_objective': '投资目标',
         'investment_scope': '投资范围',
-        'investment_strategy': '投资策略'
+        'investment_strategy': '投资策略',
+        'fund_rate': '现费率',
+        'fund_min_subscription': '最小申购金额',
+        'fund_size': '基金规模',
+        'hqdate': '行情日期',
+        'dwjz': '单位净值',
+        'gsz': '估算值',
+        'gszzl': '估算增长率',
+        'gztime': '估值时间'
       }
       return keyMap[key] || key
+    }
+
+    // 过滤不需要显示的基础信息字段
+    const filterBasicInfo = (key, value) => {
+      const ignoredKeys = ['stock_codes', 'managers', 'net_worth_trend', 'ac_worth_trend'];
+      if (ignoredKeys.includes(key)) return false;
+      if (typeof value === 'object' && value !== null) return false;
+      return true;
     }
 
     // 监听基金代码变化
@@ -216,7 +235,8 @@ export default {
       processedNetWorthTrend,
       processedAcWorthTrend,
       retry,
-      formatKey
+      formatKey,
+      filterBasicInfo
     }
   }
 }
