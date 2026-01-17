@@ -273,26 +273,48 @@ export default {
         const toGroupId = dragOverIndex.value.groupId
         const fromFunds = fromGroupId === null ? ungroupedFunds.value : getGroupFunds(fromGroupId)
         
+        // 防御性检查：确保源列表存在
+        if (!fromFunds) {
+          draggingIndex.value = null
+          dragOverIndex.value = null
+          return
+        }
+
         if (fromGroupId === toGroupId) {
+          // 优化：位置没变不需要请求
+          if (draggingIndex.value.index === dragOverIndex.value.index) {
+            draggingIndex.value = null
+            dragOverIndex.value = null
+            return
+          }
+
           // 同分组内排序
           const funds = [...fromFunds]
-          const [moved] = funds.splice(draggingIndex.value.index, 1)
-          funds.splice(dragOverIndex.value.index, 0, moved)
-          
-          try {
-            await watchlistAPI.reorder(funds.map(f => f.fund_code), fromGroupId)
-            loadWatchlist()
-          } catch (error) {
-            console.error('排序失败:', error)
+          // 确保索引在有效范围内
+          if (draggingIndex.value.index >= 0 && draggingIndex.value.index < funds.length) {
+            const [moved] = funds.splice(draggingIndex.value.index, 1)
+            
+            // 确保移动的对象存在
+            if (moved) {
+              funds.splice(dragOverIndex.value.index, 0, moved)
+              try {
+                await watchlistAPI.reorder(funds.map(f => f.fund_code), fromGroupId)
+                loadWatchlist()
+              } catch (error) {
+                console.error('排序失败:', error)
+              }
+            }
           }
         } else {
           // 跨分组移动
           const fund = fromFunds[draggingIndex.value.index]
-          try {
-            await watchlistAPI.moveFundToGroup(fund.fund_code, toGroupId)
-            loadWatchlist()
-          } catch (error) {
-            console.error('移动失败:', error)
+          if (fund) {
+            try {
+              await watchlistAPI.moveFundToGroup(fund.fund_code, toGroupId)
+              loadWatchlist()
+            } catch (error) {
+              console.error('移动失败:', error)
+            }
           }
         }
       }
