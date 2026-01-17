@@ -372,12 +372,12 @@ export default {
 }
 
 .excellent {
-  color: #52c41a;
+  color: #f81303;
   font-weight: 600;
 }
 
 .good {
-  color: #91cc75;
+  color: #f76b58;
   font-weight: 500;
 }
 

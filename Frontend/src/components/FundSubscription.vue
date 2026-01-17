@@ -143,7 +143,7 @@ export default {
             type: 'bar',
             data: buyData,
             itemStyle: {
-              color: '#52c41a'
+              color: '#ff4d4f'
             },
             barWidth: '20%'
           },
@@ -152,7 +152,7 @@ export default {
             type: 'bar',
             data: sellData,
             itemStyle: {
-              color: '#ff4d4f'
+              color: '#52c41a'
             },
             barWidth: '20%'
           },
@@ -263,10 +263,10 @@ export default {
   color: #333;
 }
 
-.subscription-table .buy { color: #52c41a; }
-.subscription-table .sell { color: #ff4d4f; }
-.subscription-table .positive { color: #52c41a; font-weight: 600; }
-.subscription-table .negative { color: #ff4d4f; font-weight: 600; }
+.subscription-table .buy { color: #ff4d4f; }
+.subscription-table .sell { color: #52c41a; }
+.subscription-table .positive { color: #ff4d4f; font-weight: 600; }
+.subscription-table .negative { color: #52c41a; font-weight: 600; }
 
 .no-data {
   display: flex;
