@@ -165,7 +165,7 @@ export default {
 
     const processData = () => {
         const rawData = (props.netWorthTrend || []).map(item => [item.x, item.y]);
-        const filtered = filterByDate(rawData, selectedRange.value);
+        const filtered = filterByDate(rawData, selectedRange.value).slice().sort((a, b) => a[0] - b[0]);
         
         if (filtered.length === 0) return { netWorth: [], drawdownInfo: null }
 
@@ -400,7 +400,7 @@ export default {
                        label: {
                            offset: [0, 15],
                            formatter: `最大回撤${drawdownInfo.val}%`,
-                           backgroundColor: '#00bfa5',
+                           backgroundColor: 'rgba(0, 191, 165, 0.7)',
                            position: 'top'
                        }
                   });
@@ -412,7 +412,7 @@ export default {
                            label: {
                                offset: [0, -15],
                                formatter: `${drawdownInfo.days}天修复`,
-                               backgroundColor: '#ff5252',
+                               backgroundColor: 'rgba(255, 82, 82, 0.7)',
                                position: 'bottom'
                            }
                        });

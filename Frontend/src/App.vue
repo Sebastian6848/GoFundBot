@@ -7,6 +7,25 @@
           <h1>GoFundBot</h1>
           <p>一个有趣的基金分析机器人</p>
         </div>
+        <!-- 模式切换 -->
+        <div class="header-right">
+          <div class="mode-switch">
+            <button 
+              class="mode-btn" 
+              :class="{ active: viewMode === 'detail' }"
+              @click="viewMode = 'detail'"
+            >
+              📋 基金详情
+            </button>
+            <button 
+              class="mode-btn" 
+              :class="{ active: viewMode === 'compare' }"
+              @click="viewMode = 'compare'"
+            >
+              📈 基金对比
+            </button>
+          </div>
+        </div>
       </div>
     </header>
     
@@ -14,18 +33,35 @@
       <div class="main-layout">
         <!-- 左侧：自选列表 -->
         <aside class="sidebar-left">
-          <FundWatchlist @view-fund="handleFundSelected" />
+          <FundWatchlist 
+            @view-fund="handleFundSelected" 
+            @add-to-compare="handleAddToCompare"
+            :compareMode="viewMode === 'compare'"
+            :compareFunds="compareFunds"
+          />
         </aside>
         
-        <!-- 右侧：搜索和详情 -->
+        <!-- 右侧：根据模式显示不同内容 -->
         <div class="content-area">
-          <FundSearch @fund-selected="handleFundSelected" />
-          <FundDetail v-if="selectedFundCode" :fundCode="selectedFundCode" />
-          <div v-else class="welcome">
-            <div class="welcome-icon">📊</div>
-            <p>请在搜索框中输入基金代码或名称</p>
-            <p class="welcome-hint">或从左侧自选列表中选择基金开始分析</p>
-          </div>
+          <!-- 对比模式 -->
+          <template v-if="viewMode === 'compare'">
+            <FundComparison 
+              :compareFunds="compareFunds"
+              @remove-fund="handleRemoveFromCompare"
+              @clear-funds="handleClearCompare"
+            />
+          </template>
+          
+          <!-- 详情模式 -->
+          <template v-else>
+            <FundSearch @fund-selected="handleFundSelected" />
+            <FundDetail v-if="selectedFundCode" :fundCode="selectedFundCode" />
+            <div v-else class="welcome">
+              <div class="welcome-icon">📊</div>
+              <p>请在搜索框中输入基金代码或名称</p>
+              <p class="welcome-hint">或从左侧自选列表中选择基金开始分析</p>
+            </div>
+          </template>
         </div>
       </div>
     </main>
@@ -41,20 +77,53 @@ import { ref, onMounted } from 'vue'
 import FundSearch from './components/FundSearch.vue'
 import FundDetail from './components/FundDetail.vue'
 import FundWatchlist from './components/FundWatchlist.vue'
+import FundComparison from './components/FundComparison.vue'
 
 export default {
   name: 'App',
   components: {
     FundSearch,
     FundDetail,
-    FundWatchlist
+    FundWatchlist,
+    FundComparison
   },
   setup() {
     const selectedFundCode = ref('')
     const currentTime = ref('')
+    const viewMode = ref('detail') // 'detail' 或 'compare'
+    const compareFunds = ref([]) // 用于对比的基金列表
     
     const handleFundSelected = (fundCode) => {
       selectedFundCode.value = fundCode
+    }
+    
+    // 添加基金到对比列表
+    const handleAddToCompare = (fund) => {
+      // 最多5只基金
+      if (compareFunds.value.length >= 5) {
+        alert('最多只能对比5只基金')
+        return
+      }
+      // 检查是否已存在
+      if (compareFunds.value.some(f => f.code === fund.code)) {
+        // 如果已存在则移除
+        compareFunds.value = compareFunds.value.filter(f => f.code !== fund.code)
+        return
+      }
+      compareFunds.value.push({
+        code: fund.code,
+        name: fund.name
+      })
+    }
+    
+    // 从对比列表移除基金
+    const handleRemoveFromCompare = (fundCode) => {
+      compareFunds.value = compareFunds.value.filter(f => f.code !== fundCode)
+    }
+    
+    // 清空对比列表
+    const handleClearCompare = () => {
+      compareFunds.value = []
     }
     
     // 更新时间
@@ -72,7 +141,12 @@ export default {
     return {
       selectedFundCode,
       currentTime,
-      handleFundSelected
+      viewMode,
+      compareFunds,
+      handleFundSelected,
+      handleAddToCompare,
+      handleRemoveFromCompare,
+      handleClearCompare
     }
   }
 }
@@ -106,6 +180,9 @@ export default {
 .header-content {
   max-width: 1600px;
   margin: 0 auto;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
 }
 
 .header-left h1 {
@@ -116,6 +193,41 @@ export default {
 .header-left p {
   opacity: 0.9;
   font-size: 0.9rem;
+}
+
+.header-right {
+  display: flex;
+  align-items: center;
+}
+
+.mode-switch {
+  display: flex;
+  gap: 8px;
+  background: rgba(255, 255, 255, 0.15);
+  padding: 4px;
+  border-radius: 8px;
+}
+
+.mode-btn {
+  padding: 8px 16px;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.8);
+  transition: all 0.2s;
+}
+
+.mode-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: white;
+}
+
+.mode-btn.active {
+  background: white;
+  color: #667eea;
 }
 
 .app-main {

@@ -1,21 +1,46 @@
 <template>
   <div v-if="fundInfo" class="fund-basic-info">
     <div class="info-header">
-      <div class="header-left">
-        <h2>{{ fundInfo.name || '未知基金' }}</h2>
-        <span class="fund-code">{{ fundCode }}</span>
-        <!-- 自选按钮 -->
-        <button 
-          class="watchlist-btn" 
-          :class="{ 'in-watchlist': isInWatchlist }"
-          @click="toggleWatchlist"
-          :disabled="watchlistLoading"
-          :title="isInWatchlist ? '移除自选' : '添加自选'"
-        >
-          <span class="star-icon">{{ isInWatchlist ? '★' : '☆' }}</span>
-          <span class="btn-text">{{ isInWatchlist ? '已自选' : '自选' }}</span>
-        </button>
+      <div class="header-left-group">
+        <div class="title-row">
+          <h2>{{ fundInfo.name || '未知基金' }}</h2>
+          <span class="fund-code">{{ fundCode }}</span>
+          <!-- 自选按钮 -->
+          <button 
+            class="watchlist-btn" 
+            :class="{ 'in-watchlist': isInWatchlist }"
+            @click="toggleWatchlist"
+            :disabled="watchlistLoading"
+            :title="isInWatchlist ? '移除自选' : '添加自选'"
+          >
+            <span class="star-icon">{{ isInWatchlist ? '★' : '☆' }}</span>
+            <span class="btn-text">{{ isInWatchlist ? '已自选' : '自选' }}</span>
+          </button>
+        </div>
+
+        <!-- 风险指标区域 (移至此处) -->
+        <div v-if="riskMetrics" class="risk-metrics-inline">
+          <div class="risk-item">
+            <span class="risk-label">夏普比率(1年)</span>
+            <span class="risk-value" :class="getSharpeClass(riskMetrics.sharpe_ratio_1y)">
+              {{ riskMetrics.sharpe_ratio_1y || '--' }}
+            </span>
+          </div>
+          <div class="risk-item">
+            <span class="risk-label">最大回撤(1年)</span>
+            <span class="risk-value negative">
+              {{ riskMetrics.max_drawdown_1y ? '-' + riskMetrics.max_drawdown_1y + '%' : '--' }}
+            </span>
+          </div>
+          <div class="risk-item">
+            <span class="risk-label">年化波动率</span>
+            <span class="risk-value">
+              {{ riskMetrics.volatility_1y ? riskMetrics.volatility_1y + '%' : '--' }}
+            </span>
+          </div>
+        </div>
       </div>
+
       <div class="header-right">
         <div class="net-worth-box">
           <div class="label">单位净值</div>
@@ -86,6 +111,11 @@ export default {
     },
     // 新增：接收父组件传递的基金数据，避免重复请求
     fundData: {
+      type: Object,
+      default: null
+    },
+    // 新增：接收风险指标
+    riskMetrics: {
       type: Object,
       default: null
     }
@@ -205,6 +235,13 @@ export default {
       const num = parseFloat(value)
       return num > 0 ? 'positive' : num < 0 ? 'negative' : ''
     },
+    getSharpeClass(value) {
+      if (!value) return ''
+      const num = parseFloat(value)
+      if (num >= 1) return 'positive'
+      if (num >= 0) return ''
+      return 'negative'
+    },
     formatDate(dateStr) {
       if (!dateStr) return '--'
       return dateStr
@@ -254,14 +291,21 @@ export default {
   border-bottom: 1px solid rgba(255, 255, 255, 0.2);
 }
 
-.header-left {
+.header-left-group {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.title-row {
   display: flex;
   align-items: center;
   gap: 12px;
   flex-wrap: wrap;
 }
 
-.header-left h2 {
+.title-row h2 {
   margin: 0;
   font-size: 24px;
   font-weight: 600;
@@ -359,6 +403,43 @@ export default {
   font-size: 11px;
   opacity: 0.8;
   margin-top: 4px;
+}
+
+/* 风险指标区域 */
+.risk-metrics-inline {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  margin-top: 4px; 
+}
+
+.risk-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.risk-label {
+  font-size: 12px;
+  opacity: 0.85;
+}
+
+.risk-value {
+  font-size: 14px;
+  font-weight: 600;
+  padding: 2px 8px;
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 4px;
+}
+
+.risk-value.positive {
+  color: #ffd700;
+  background: rgba(255, 215, 0, 0.2);
+}
+
+.risk-value.negative {
+  color: #2ed573;
+  background: rgba(46, 213, 115, 0.2);
 }
 
 .info-metrics {

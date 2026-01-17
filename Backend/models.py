@@ -99,3 +99,27 @@ class FundWatchlist(Base):
     sort_order = Column(Integer, default=0)  # 排序顺序，数字越小越靠前
     created_time = Column(DateTime, default=datetime.now)
     updated_time = Column(DateTime, default=datetime.now, onupdate=datetime.now)
+
+
+class FundRiskMetrics(Base):
+    """基金风险指标表 - 存储计算的夏普比率、最大回撤等"""
+    __tablename__ = 'fund_risk_metrics'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    fund_code = Column(String(6), unique=True, nullable=False)
+    # 最大回撤（百分比）
+    max_drawdown_3m = Column(Float)  # 近3月
+    max_drawdown_6m = Column(Float)  # 近6月
+    max_drawdown_1y = Column(Float)  # 近1年
+    max_drawdown_3y = Column(Float)  # 近3年
+    max_drawdown_all = Column(Float)  # 成立来
+    # 夏普比率（年化）
+    sharpe_ratio_1y = Column(Float)  # 近1年
+    sharpe_ratio_3y = Column(Float)  # 近3年
+    # 年化波动率
+    volatility_1y = Column(Float)  # 近1年
+    volatility_3y = Column(Float)  # 近3年
+    # 年化收益率
+    annual_return_1y = Column(Float)  # 近1年
+    annual_return_3y = Column(Float)  # 近3年
+    updated_time = Column(DateTime, default=datetime.now, onupdate=datetime.now)

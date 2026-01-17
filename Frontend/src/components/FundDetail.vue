@@ -1,7 +1,7 @@
 <template>
   <div class="fund-detail">
     <!-- 基金基础信息组件 -->
-    <FundBasicInfo :fundCode="currentFundCode" :fundData="fundDetail" />
+    <FundBasicInfo :fundCode="currentFundCode" :fundData="fundDetail" :riskMetrics="riskMetrics" />
     
     <!-- 主要内容区域 - Dashboard 布局 -->
     <div v-if="fundDetail" class="dashboard">
@@ -192,6 +192,128 @@ export default {
     const modalVisible = ref(false)
     const modalType = ref('')
 
+    // 计算风险指标
+    const riskMetrics = computed(() => {
+      if (!fundDetail.value?.net_worth_trend || fundDetail.value.net_worth_trend.length < 30) {
+        return null
+      }
+      
+      try {
+        const trend = fundDetail.value.net_worth_trend
+        const sortedData = [...trend].sort((a, b) => {
+          const dateA = new Date(a.date).getTime()
+          const dateB = new Date(b.date).getTime()
+          return dateA - dateB
+        })
+        
+        // 转换为净值数组
+        const values = sortedData.map(item => parseFloat(item.net_worth)).filter(v => !isNaN(v))
+        const dates = sortedData.map(item => item.date)
+        
+        if (values.length < 30) return null
+        
+        const now = new Date()
+        
+        // 获取指定时间段的数据
+        const getDataForPeriod = (months) => {
+          const cutoffDate = new Date(now)
+          cutoffDate.setMonth(cutoffDate.getMonth() - months)
+          const cutoffStr = cutoffDate.toISOString().split('T')[0]
+          
+          const periodValues = []
+          for (let i = 0; i < dates.length; i++) {
+            if (dates[i] >= cutoffStr) {
+              periodValues.push(values[i])
+            }
+          }
+          return periodValues
+        }
+        
+        // 计算最大回撤
+        const calcMaxDrawdown = (periodValues) => {
+          if (periodValues.length < 2) return null
+          
+          let peak = periodValues[0]
+          let maxDrawdown = 0
+          
+          for (const value of periodValues) {
+            if (value > peak) peak = value
+            const drawdown = (peak - value) / peak * 100
+            if (drawdown > maxDrawdown) maxDrawdown = drawdown
+          }
+          
+          return maxDrawdown.toFixed(2)
+        }
+        
+        // 计算日收益率
+        const calcDailyReturns = (periodValues) => {
+          if (periodValues.length < 2) return []
+          const returns = []
+          for (let i = 1; i < periodValues.length; i++) {
+            if (periodValues[i-1] !== 0) {
+              returns.push((periodValues[i] - periodValues[i-1]) / periodValues[i-1])
+            }
+          }
+          return returns
+        }
+        
+        // 计算年化收益率
+        const calcAnnualReturn = (periodValues, tradingDays) => {
+          if (periodValues.length < 2 || periodValues[0] === 0 || tradingDays <= 0) return null
+          const totalReturn = (periodValues[periodValues.length - 1] - periodValues[0]) / periodValues[0]
+          const annualReturn = (Math.pow(1 + totalReturn, 252 / tradingDays) - 1) * 100
+          return annualReturn.toFixed(2)
+        }
+        
+        // 计算年化波动率
+        const calcVolatility = (dailyReturns) => {
+          if (dailyReturns.length < 10) return null
+          const mean = dailyReturns.reduce((a, b) => a + b, 0) / dailyReturns.length
+          const variance = dailyReturns.reduce((sum, r) => sum + Math.pow(r - mean, 2), 0) / dailyReturns.length
+          const dailyVol = Math.sqrt(variance)
+          const annualVol = dailyVol * Math.sqrt(252) * 100
+          return annualVol.toFixed(2)
+        }
+        
+        // 计算夏普比率（无风险利率2%）
+        const calcSharpeRatio = (annualReturn, volatility) => {
+          if (!annualReturn || !volatility || parseFloat(volatility) === 0) return null
+          const sharpe = (parseFloat(annualReturn) - 2.0) / parseFloat(volatility)
+          return sharpe.toFixed(2)
+        }
+        
+        // 计算近1年指标
+        const values1y = getDataForPeriod(12)
+        const dailyReturns1y = calcDailyReturns(values1y)
+        const annualReturn1y = calcAnnualReturn(values1y, values1y.length)
+        const volatility1y = calcVolatility(dailyReturns1y)
+        const sharpe1y = calcSharpeRatio(annualReturn1y, volatility1y)
+        const maxDrawdown1y = calcMaxDrawdown(values1y)
+        
+        // 计算近3年指标
+        const values3y = getDataForPeriod(36)
+        const dailyReturns3y = calcDailyReturns(values3y)
+        const annualReturn3y = calcAnnualReturn(values3y, values3y.length)
+        const volatility3y = calcVolatility(dailyReturns3y)
+        const sharpe3y = calcSharpeRatio(annualReturn3y, volatility3y)
+        const maxDrawdown3y = calcMaxDrawdown(values3y)
+        
+        return {
+          sharpe_ratio_1y: sharpe1y,
+          sharpe_ratio_3y: sharpe3y,
+          max_drawdown_1y: maxDrawdown1y,
+          max_drawdown_3y: maxDrawdown3y,
+          volatility_1y: volatility1y,
+          volatility_3y: volatility3y,
+          annual_return_1y: annualReturn1y,
+          annual_return_3y: annualReturn3y
+        }
+      } catch (e) {
+        console.error('计算风险指标错误:', e)
+        return null
+      }
+    })
+
     // 打开模态框
     const openModal = (type) => {
       modalType.value = type
@@ -320,6 +442,7 @@ export default {
       error,
       processedNetWorthTrend,
       processedAcWorthTrend,
+      riskMetrics,
       retry,
       modalVisible,
       modalType,

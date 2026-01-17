@@ -38,6 +38,12 @@ export const fundAPI = {
   // 获取基金走势数据
   getFundTrend(fundCode) {
     return api.get(`/fund/${fundCode}/trend`)
+  },
+  
+  // 获取基金对比数据（带缓存，包含风险指标）
+  getFundCompareData(fundCode, forceRefresh = false) {
+    const params = forceRefresh ? '?refresh=true' : ''
+    return api.get(`/fund/${fundCode}/compare-data${params}`)
   }
 }
 

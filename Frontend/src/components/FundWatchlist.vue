@@ -65,6 +65,8 @@
             :selectedFunds="selectedFunds"
             :draggingIndex="draggingIndex"
             :groupId="null"
+            :compareMode="compareMode"
+            :compareFunds="compareFunds"
             @toggle-select="toggleSelect"
             @view-fund="viewFundDetail"
             @remove-fund="removeFund"
@@ -72,6 +74,7 @@
             @drag-end="onDragEnd"
             @drag-over="onDragOver"
             @drop="onDrop"
+            @add-to-compare="addToCompare"
           />
         </div>
       </div>
@@ -100,6 +103,8 @@
             :selectedFunds="selectedFunds"
             :draggingIndex="draggingIndex"
             :groupId="group.id"
+            :compareMode="compareMode"
+            :compareFunds="compareFunds"
             @toggle-select="toggleSelect"
             @view-fund="viewFundDetail"
             @remove-fund="removeFund"
@@ -107,6 +112,7 @@
             @drag-end="onDragEnd"
             @drag-over="onDragOver"
             @drop="onDrop"
+            @add-to-compare="addToCompare"
           />
           <div v-if="getGroupFunds(group.id).length === 0" class="group-empty">
             暂无基金，拖拽基金到此分组
@@ -139,14 +145,18 @@
 </template>
 
 <script>
-import { ref, computed, onMounted, nextTick } from 'vue'
+import { ref, computed, onMounted, nextTick, toRef } from 'vue'
 import { watchlistAPI } from '../services/api'
 import FundListItems from './FundListItems.vue'
 
 export default {
   name: 'FundWatchlist',
   components: { FundListItems },
-  emits: ['view-fund'],
+  props: {
+    compareMode: { type: Boolean, default: false },
+    compareFunds: { type: Array, default: () => [] }
+  },
+  emits: ['view-fund', 'add-to-compare'],
   setup(props, { emit }) {
     const watchlist = ref([])
     const groups = ref([])
@@ -156,6 +166,7 @@ export default {
     const draggingIndex = ref(null)
     const dragOverIndex = ref(null)
     const expandedGroups = ref([null])
+    const isInitialLoad = ref(true)
     
     // 分组弹窗
     const showGroupModal = ref(false)
@@ -185,8 +196,15 @@ export default {
         const response = await watchlistAPI.getWatchlist()
         watchlist.value = response.data.data || []
         groups.value = response.data.groups || []
-        // 默认展开所有分组
-        expandedGroups.value = [null, ...groups.value.map(g => g.id)]
+        // 仅首次加载时展开所有分组，后续刷新保持用户的折叠状态
+        if (isInitialLoad.value) {
+          expandedGroups.value = [null, ...groups.value.map(g => g.id)]
+          isInitialLoad.value = false
+        } else {
+          // 移除已删除分组的展开状态，添加新分组到展开列表
+          const validGroupIds = new Set([null, ...groups.value.map(g => g.id)])
+          expandedGroups.value = expandedGroups.value.filter(id => validGroupIds.has(id))
+        }
       } catch (error) {
         console.error('加载自选列表失败:', error)
       } finally {
@@ -259,6 +277,11 @@ export default {
     // 查看详情
     const viewFundDetail = (fundCode) => {
       emit('view-fund', fundCode)
+    }
+
+    // 添加到对比
+    const addToCompare = (fund) => {
+      emit('add-to-compare', fund)
     }
 
     // 拖拽排序
@@ -385,7 +408,11 @@ export default {
         if (editingGroup.value) {
           await watchlistAPI.renameGroup(editingGroup.value.id, name)
         } else {
-          await watchlistAPI.createGroup(name)
+          const response = await watchlistAPI.createGroup(name)
+          // 新创建的分组自动展开
+          if (response.data && response.data.id) {
+            expandedGroups.value.push(response.data.id)
+          }
         }
         closeGroupModal()
         loadWatchlist()
@@ -425,6 +452,8 @@ export default {
       editingGroup,
       groupName,
       groupNameInput,
+      compareMode: toRef(props, 'compareMode'),
+      compareFunds: toRef(props, 'compareFunds'),
       loadWatchlist,
       refreshWatchlist,
       toggleGroup,
@@ -434,6 +463,7 @@ export default {
       batchDelete,
       removeFund,
       viewFundDetail,
+      addToCompare,
       onDragStart,
       onDragEnd,
       onDragOver,
