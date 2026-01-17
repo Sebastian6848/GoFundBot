@@ -2,6 +2,7 @@ import requests
 import json
 import threading
 import time
+import os
 
 class StockService:
     _instance = None
@@ -20,13 +21,54 @@ class StockService:
             return
         self.stock_details = {} # Map code -> {name, market}
         self.last_update = 0
-        self.cache_ttl = 24 * 3600  # 24 hours
+        self.cache_ttl = 24 * 3600 * 10  # 10 days
+        self.cache_file = os.path.abspath(
+            os.path.join(os.path.dirname(__file__), "..", "Data", "stock_list_cache.json")
+        )
         self._load_data()
         self._initialized = True
 
     def _load_data(self):
-        """Fetch data from APIs in a separate thread to avoid blocking startup"""
-        threading.Thread(target=self._fetch_all, daemon=True).start()
+        """Load stock data from local cache; refresh if missing or expired."""
+        loaded = self._load_from_cache()
+
+        if not loaded or self._is_cache_expired():
+            threading.Thread(target=self._refresh_cache, daemon=True).start()
+
+    def _load_from_cache(self):
+        if not os.path.exists(self.cache_file):
+            return False
+
+        try:
+            with open(self.cache_file, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            self.last_update = data.get("last_update", 0)
+            self.stock_details = data.get("stock_details", {})
+            return bool(self.stock_details)
+        except Exception as e:
+            print(f"Error loading stock cache: {e}")
+            return False
+
+    def _is_cache_expired(self):
+        if not self.last_update:
+            return True
+        return (time.time() - self.last_update) > self.cache_ttl
+
+    def _save_to_cache(self):
+        try:
+            os.makedirs(os.path.dirname(self.cache_file), exist_ok=True)
+            with open(self.cache_file, "w", encoding="utf-8") as f:
+                json.dump({
+                    "last_update": self.last_update,
+                    "stock_details": self.stock_details
+                }, f, ensure_ascii=False)
+        except Exception as e:
+            print(f"Error saving stock cache: {e}")
+
+    def _refresh_cache(self):
+        """Download stock list and save to local cache."""
+        self._fetch_all()
+        self._save_to_cache()
 
     def _fetch_all(self):
         self._fetch_hk_stocks()

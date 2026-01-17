@@ -120,6 +120,7 @@ export default {
 .portfolio-content {
   flex: 1;
   overflow-y: auto;
+  padding-right: 12px;
 }
 
 .portfolio-header {
@@ -189,7 +190,7 @@ export default {
 
 .col-market {
   width: 60px;
-  text-align: right;
+  text-align: left;
   color: #888;
   font-size: 11px;
 }

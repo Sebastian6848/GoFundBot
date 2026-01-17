@@ -15,7 +15,7 @@
                 <th>时间</th>
                 <th v-for="serie in series" :key="serie.name">
                   <span class="legend-dot" :style="{ background: getColor(serie.name) }"></span>
-                  {{ serie.name }}
+                  {{ formatLegendName(serie.name) }}
                 </th>
               </tr>
             </thead>
@@ -70,6 +70,11 @@ export default {
       return colors[name] || '#5470c6'
     }
 
+    const formatLegendName = (name) => {
+      if (!name) return ''
+      return name.replace(/比例/g, '')
+    }
+
     const formatValue = (value) => {
       if (value === null || value === undefined) return '--'
       return value.toFixed(2) + '%'
@@ -86,7 +91,7 @@ export default {
 
       // 准备堆叠柱状图数据
       const seriesData = series.value.map(serie => ({
-        name: serie.name,
+        name: formatLegendName(serie.name),
         type: 'bar',
         stack: 'total',
         barWidth: '50%',
@@ -119,7 +124,7 @@ export default {
           }
         },
         legend: {
-          data: series.value.map(s => s.name),
+          data: series.value.map(s => formatLegendName(s.name)),
           bottom: 0
         },
         grid: {
@@ -168,6 +173,7 @@ export default {
       series,
       hasData,
       getColor,
+      formatLegendName,
       formatValue
     }
   }

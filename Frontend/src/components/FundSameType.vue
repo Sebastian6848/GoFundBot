@@ -56,7 +56,7 @@ export default {
   emits: ['fund-select'],
   setup(props, { emit }) {
     const activePeriod = ref(0)
-    const periods = ['近1年', '近2年', '近3年', '近5年', '今年以来']
+    const periods = ['主题1', '主题2', '主题3', '主题4', '主题5']
 
     const currentFunds = computed(() => {
       if (!props.sameTypeFunds || !Array.isArray(props.sameTypeFunds)) {
