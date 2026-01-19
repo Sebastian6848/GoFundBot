@@ -71,10 +71,54 @@
           <template v-else>
             <FundSearch @fund-selected="handleFundSelected" />
             <FundDetail v-if="selectedFundCode" :fundCode="selectedFundCode" />
-            <div v-else class="welcome">
-              <div class="welcome-icon">📊</div>
-              <p>请在搜索框中输入基金代码或名称</p>
-              <p class="welcome-hint">或从左侧自选列表中选择基金开始分析</p>
+            <div v-else class="welcome-container">
+              <div class="welcome-header">
+                <div class="welcome-icon">📊</div>
+                <h2>GoFundBot 基金分析助手</h2>
+                <p>您的专业基金投资顾问</p>
+              </div>
+
+              <div class="user-guide">
+                <h3>📝 快速入门</h3>
+                <div class="guide-steps">
+                  <div class="step-item">
+                    <div class="step-icon-wrapper">
+                      <span class="step-icon">🔍</span>
+                    </div>
+                    <div class="step-content">
+                      <h4>搜索基金</h4>
+                      <p>输入代码/名称查找</p>
+                    </div>
+                  </div>
+                  <div class="step-item">
+                    <div class="step-icon-wrapper">
+                      <span class="step-icon">📋</span>
+                    </div>
+                    <div class="step-content">
+                      <h4>深度分析</h4>
+                      <p>业绩、持仓与评级</p>
+                    </div>
+                  </div>
+                  <div class="step-item">
+                    <div class="step-icon-wrapper">
+                      <span class="step-icon">⭐</span>
+                    </div>
+                    <div class="step-content">
+                      <h4>自选管理</h4>
+                      <p>定制关注列表</p>
+                    </div>
+                  </div>
+                  <div class="step-item">
+                    <div class="step-icon-wrapper">
+                      <span class="step-icon">📈</span>
+                    </div>
+                    <div class="step-content">
+                      <h4>多维对比</h4>
+                      <p>全方位对比表现</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
             </div>
           </template>
         </div>
@@ -285,29 +329,129 @@ export default {
   width: 100%;
 }
 
-.welcome {
+.welcome-container {
   text-align: center;
-  padding: 80px 20px;
-  color: #7f8c8d;
+  padding: 60px 40px;
+  color: #2c3e50;
   background: white;
   border-radius: 12px;
   margin-top: 20px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.welcome-header {
+  margin-bottom: 50px;
 }
 
 .welcome-icon {
-  font-size: 48px;
-  margin-bottom: 15px;
+  font-size: 64px;
+  margin-bottom: 20px;
+  display: inline-block;
+  background: #f0f4ff;
+  width: 100px;
+  height: 100px;
+  line-height: 100px;
+  border-radius: 50%;
 }
 
-.welcome p {
+.welcome-header h2 {
+  font-size: 2rem;
+  margin-bottom: 10px;
+  color: #2d3748;
+}
+
+.welcome-header p {
+  font-size: 1.1rem;
+  color: #718096;
+}
+
+.user-guide {
+  width: 100%;
+  max-width: 900px;
+}
+
+.user-guide h3 {
+  font-size: 1.2rem;
+  margin-bottom: 30px;
+  color: #4a5568;
+  position: relative;
+  display: inline-block;
+}
+
+.user-guide h3::after {
+  content: '';
+  position: absolute;
+  bottom: -8px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 40px;
+  height: 3px;
+  background: #667eea;
+  border-radius: 2px;
+}
+
+.guide-steps {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 20px;
+}
+
+.step-item {
+  background: #f8fafc;
+  padding: 25px 20px;
+  border-radius: 12px;
+  transition: all 0.3s;
+  border: 1px solid transparent;
+}
+
+.step-item:hover {
+  transform: translateY(-5px);
+  background: white;
+  border-color: #e2e8f0;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.05);
+}
+
+.step-icon-wrapper {
+  background: white;
+  width: 60px;
+  height: 60px;
+  border-radius: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto 15px;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.05);
+  transition: all 0.3s;
+}
+
+.step-item:hover .step-icon-wrapper {
+  background: #667eea;
+  transform: scale(1.1);
+}
+
+.step-icon {
+  font-size: 28px;
+}
+
+.step-content h4 {
   font-size: 1.1rem;
   margin-bottom: 8px;
+  color: #2d3748;
 }
 
-.welcome-hint {
-  font-size: 0.9rem !important;
-  color: #9ca3af;
+.step-content p {
+  font-size: 0.9rem;
+  color: #718096;
+  line-height: 1.5;
+}
+
+@media (max-width: 768px) {
+  .guide-steps {
+    grid-template-columns: repeat(2, 1fr);
+  }
 }
 
 .app-footer {
