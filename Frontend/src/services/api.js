@@ -180,4 +180,12 @@ export const screeningAPI = {
   }
 }
 
+// ==================== 基金回测 API ====================
+export const backtestAPI = {
+  // 定投回测
+  fixedInvestment(data) {
+    return api.post('/backtest/fixed-investment', data)
+  }
+}
+
 export default api

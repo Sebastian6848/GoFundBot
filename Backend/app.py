@@ -2001,5 +2001,348 @@ def get_data_stats():
     return jsonify(stats)
 
 
+# ==================== 基金回测功能 ====================
+
+@app.route('/api/backtest/fixed-investment', methods=['POST'])
+def backtest_fixed_investment():
+    """
+    基金定投回测
+    
+    请求参数：
+    {
+        "fund_code": "000001",
+        "start_date": "2020-01-01",
+        "end_date": "2023-12-31",
+        "investment_type": "monthly",  // monthly, weekly, lump_sum
+        "amount": 1000,  // 每期投资金额
+        "initial_amount": 0, // 初始资金（可选）
+        "fee_rate": 0.15,  // 手续费率（百分比）
+        "take_profit_rate": 20, // 止盈率（百分比，可选）
+        "stop_loss_rate": 10 // 止损率（百分比，可选，正数）
+    }
+    """
+    data = request.get_json()
+    
+    try:
+        fund_code = data.get('fund_code')
+        start_date = data.get('start_date')
+        end_date = data.get('end_date')
+        investment_type = data.get('investment_type', 'monthly')
+        
+        # 处理可能为空的数值输入
+        def safe_float(val, default):
+            if val is None or val == '':
+                return default
+            return float(val)
+
+        amount = safe_float(data.get('amount'), 1000)
+        initial_amount = safe_float(data.get('initial_amount'), 0)
+        fee_rate = safe_float(data.get('fee_rate'), 0.15) / 100
+        
+        take_profit_rate = data.get('take_profit_rate')
+        if take_profit_rate is not None and take_profit_rate != '':
+            take_profit_rate = float(take_profit_rate) / 100
+        else:
+            take_profit_rate = None
+            
+        stop_loss_rate = data.get('stop_loss_rate')
+        if stop_loss_rate is not None and stop_loss_rate != '':
+            stop_loss_rate = float(stop_loss_rate) / 100
+        else:
+            stop_loss_rate = None
+    
+        if not all([fund_code, start_date, end_date]):
+            return jsonify({'error': 'Missing required parameters'}), 400
+        
+        db = get_db()
+        
+        # 获取净值数据
+        trend = db.query(FundTrend).filter(FundTrend.fund_code == fund_code).first()
+        if not trend:
+            # 尝试从API获取并保存数据
+            # 注意：这里需要在引入 update_single_fund_data 之前确保其可用
+            # 由于 update_single_fund_data 可能定义在其他地方或需要导入
+            # 这里假设它不可用或逻辑复杂，暂时只依赖已有数据
+            # 或者如果 update_single_fund_data 是在 fund_api 中封装的方法
+            try:
+                # 尝试使用 FundAPI 实例的 update 方法，如果存在的话
+                # 这里假设直接访问数据库查不到就是没有
+                pass 
+            except Exception as e:
+                print(f"Error auto-updating fund: {e}")
+
+        if not trend:
+            return jsonify({'error': f'Fund data not found for code {fund_code}'}), 404
+        
+        net_worth_data = _json_loads(trend.net_worth_trend_json, [])
+        if not net_worth_data:
+            return jsonify({'error': 'No net worth data available'}), 404
+        
+        # 转换日期格式并排序
+        nav_dict = {}
+        for item in net_worth_data:
+            date_str = item.get('date')
+            nav = item.get('net_worth')
+            # 修改判断逻辑，允许 net_worth 为 0 (虽然少见) 但不能为空
+            if date_str and nav is not None:
+                try:
+                    nav_dict[date_str] = float(nav)
+                except (ValueError, TypeError):
+                    continue
+        
+        # 按日期排序
+        sorted_dates = sorted(nav_dict.keys())
+        
+        if not sorted_dates:
+             return jsonify({'error': 'Valid net worth data is empty'}), 404
+
+        # 辅助日期解析函数
+        def parse_date(date_str):
+            for fmt in ['%Y-%m-%d', '%Y/%m/%d', '%Y%m%d', '%Y-%m-%d %H:%M:%S']:
+                try:
+                    return datetime.strptime(date_str, fmt)
+                except ValueError:
+                    continue
+            raise ValueError(f"Unknown date format: {date_str}")
+
+        # 过滤日期范围
+        try:
+            # 只取日期部分进行比较
+            start_dt = parse_date(start_date).replace(hour=0, minute=0, second=0, microsecond=0)
+            end_dt = parse_date(end_date).replace(hour=23, minute=59, second=59, microsecond=999999)
+        except ValueError as e:
+            return jsonify({'error': f'Invalid date format: {str(e)}'}), 400
+        
+        filtered_dates = []
+        for d in sorted_dates:
+            try:
+                current_dt = datetime.strptime(d, '%Y-%m-%d')
+                if start_dt <= current_dt <= end_dt:
+                    filtered_dates.append(d)
+            except ValueError:
+                continue
+
+        if len(filtered_dates) < 2:
+            return jsonify({'error': f'Insufficient data in range {start_date} to {end_date}. Found {len(filtered_dates)} records.'}), 400
+        
+        # 执行回测
+        result = _run_backtest(
+            nav_dict=nav_dict,
+            dates=filtered_dates,
+            investment_type=investment_type,
+            amount=amount,
+            initial_amount=initial_amount,
+            fee_rate=fee_rate,
+            take_profit_rate=take_profit_rate,
+            stop_loss_rate=stop_loss_rate
+        )
+        
+        if 'error' in result:
+             return jsonify(result), 400
+
+        return jsonify(result)
+
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': f'Backtest execution failed: {str(e)}'}), 500
+
+
+def _run_backtest(nav_dict, dates, investment_type, amount, initial_amount, fee_rate, take_profit_rate=None, stop_loss_rate=None):
+    """
+    执行回测计算
+    """
+    timeline = []
+    total_invested = 0
+    total_shares = 0
+    
+    # 确定投资日期
+    investment_dates = []
+    
+    if investment_type == 'lump_sum':
+        # 一次性投资：只在第一天
+        investment_dates = [dates[0]]
+    elif investment_type == 'monthly':
+        # 每月定投：每月第一个交易日
+        current_month = None
+        for date in dates:
+            dt = datetime.strptime(date, '%Y-%m-%d')
+            month_key = (dt.year, dt.month)
+            if month_key != current_month:
+                investment_dates.append(date)
+                current_month = month_key
+    elif investment_type == 'weekly':
+        # 每周定投：每周第一个交易日
+        current_week = None
+        for date in dates:
+            dt = datetime.strptime(date, '%Y-%m-%d')
+            week_key = (dt.year, dt.isocalendar()[1])
+            if week_key != current_week:
+                investment_dates.append(date)
+                current_week = week_key
+    
+    # 状态标记
+    sold_out = False
+    exit_reason = None
+    exit_date = None
+    cash = 0
+    
+    # 遍历所有日期，计算持仓
+    for i, date in enumerate(dates):
+        nav = nav_dict[date]
+        
+        # 如果已经清仓止盈止损，后续只计算现金价值（假设不重新买入）
+        if sold_out:
+            timeline.append({
+                'date': date,
+                'invested': round(total_invested, 2),
+                'shares': 0,
+                'nav': round(nav, 4),
+                'value': round(cash, 2),
+                'return': round(cash - total_invested, 2),
+                'return_rate': round((cash - total_invested) / total_invested * 100, 2) if total_invested > 0 else 0,
+                'is_investment_day': False,
+                'status': 'sold',
+                'exit_reason': exit_reason
+            })
+            continue
+
+        # 1. 处理初始资金 (仅第一天)
+        if i == 0 and initial_amount > 0:
+            actual_amount = initial_amount * (1 - fee_rate)
+            shares_bought = actual_amount / nav
+            total_shares += shares_bought
+            total_invested += initial_amount
+            
+        # 2. 处理定投
+        is_invest_day = False
+        if investment_type != 'lump_sum' and date in investment_dates:
+            actual_amount = amount * (1 - fee_rate)
+            shares_bought = actual_amount / nav
+            total_shares += shares_bought
+            total_invested += amount
+            is_invest_day = True
+        elif investment_type == 'lump_sum' and i == 0 and amount > 0:
+             # 如果是 lump_sum 且 amount > 0，视为第一天投入
+             # 叠加 initial_amount
+             actual_amount = amount * (1 - fee_rate)
+             shares_bought = actual_amount / nav
+             total_shares += shares_bought
+             total_invested += amount
+             is_invest_day = True
+        
+        # 计算当前市值
+        current_value = total_shares * nav
+        total_return = current_value - total_invested
+        return_rate = (total_return / total_invested * 100) if total_invested > 0 else 0
+        
+        # 3. 检查止盈止损
+        triggered = False
+        if total_invested > 0:
+            if take_profit_rate and return_rate >= (take_profit_rate * 100):
+                sold_out = True
+                exit_reason = 'take_profit'
+                triggered = True
+            elif stop_loss_rate and return_rate <= -(stop_loss_rate * 100):
+                sold_out = True
+                exit_reason = 'stop_loss'
+                triggered = True
+        
+        if triggered:
+            exit_date = date
+            cash = current_value 
+            
+            timeline.append({
+                'date': date,
+                'invested': round(total_invested, 2),
+                'shares': 0,
+                'nav': round(nav, 4),
+                'value': round(cash, 2),
+                'return': round(cash - total_invested, 2),
+                'return_rate': round((cash - total_invested) / total_invested * 100, 2),
+                'is_investment_day': is_invest_day,
+                'status': 'sold',
+                'exit_reason': exit_reason
+            })
+            continue
+
+        timeline.append({
+            'date': date,
+            'invested': round(total_invested, 2),
+            'shares': round(total_shares, 4),
+            'nav': round(nav, 4),
+            'value': round(current_value, 2),
+            'return': round(total_return, 2),
+            'return_rate': round(return_rate, 2),
+            'is_investment_day': is_invest_day,
+            'status': 'holding'
+        })
+    
+    # 计算汇总指标
+    if len(timeline) == 0:
+        return {'error': 'No data to backtest'}
+    
+    final_record = timeline[-1]
+    
+    # 计算最大回撤
+    max_drawdown = 0
+    peak_value = 0
+    for record in timeline:
+        value = record['value']
+        if value > peak_value:
+            peak_value = value
+        if peak_value > 0:
+            drawdown = (peak_value - value) / peak_value * 100
+            if drawdown > max_drawdown:
+                max_drawdown = drawdown
+    
+    # 计算年化收益率
+    start_date = datetime.strptime(timeline[0]['date'], '%Y-%m-%d')
+    end_date = datetime.strptime(timeline[-1]['date'], '%Y-%m-%d')
+    days = (end_date - start_date).days
+    years = days / 365.25
+    
+    total_return_rate = final_record['return_rate'] / 100
+    annual_return = 0
+    if years > 0 and total_return_rate > -1:
+        annual_return = (pow(1 + total_return_rate, 1 / years) - 1) * 100
+    
+    # 计算夏普比率（简化版，假设无风险利率2%）
+    returns = []
+    for i in range(1, len(timeline)):
+        if timeline[i-1]['value'] > 0:
+            daily_return = (timeline[i]['value'] - timeline[i-1]['value']) / timeline[i-1]['value']
+            returns.append(daily_return)
+    
+    sharpe_ratio = 0
+    if len(returns) > 0:
+        mean_return = sum(returns) / len(returns)
+        if len(returns) > 1:
+            variance = sum((r - mean_return) ** 2 for r in returns) / (len(returns) - 1)
+            std_dev = math.sqrt(variance)
+            if std_dev > 0:
+                # 年化夏普比率
+                risk_free_rate = 0.02 / 252  # 日无风险利率
+                sharpe_ratio = (mean_return - risk_free_rate) / std_dev * math.sqrt(252)
+    
+    summary = {
+        'total_invested': round(final_record['invested'], 2),
+        'final_value': round(final_record['value'], 2),
+        'total_return': round(final_record['return'], 2),
+        'return_rate': round(final_record['return_rate'], 2),
+        'annual_return': round(annual_return, 2),
+        'max_drawdown': round(-max_drawdown, 2),
+        'sharpe_ratio': round(sharpe_ratio, 2),
+        'investment_count': len(investment_dates) + (1 if initial_amount > 0 else 0),
+        'days': days,
+        'exit_reason': exit_reason,
+        'exit_date': exit_date
+    }
+    
+    return {
+        'summary': summary,
+        'timeline': timeline
+    }
+
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=5000)

@@ -135,7 +135,8 @@ export default {
     },
     
     selectFund(fund) {
-      this.$emit('fund-selected', fund.CODE)
+      // 传递完整的基金对象，以便接收方获取更多信息（如名称）
+      this.$emit('fund-selected', fund)
       this.searchResults = []
       this.searchKeyword = ''
     }

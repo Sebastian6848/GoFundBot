@@ -31,6 +31,13 @@
             >
               📈 基金对比
             </button>
+            <button 
+              class="mode-btn" 
+              :class="{ active: viewMode === 'backtest' }"
+              @click="viewMode = 'backtest'"
+            >
+              💰 定投回测
+            </button>
           </div>
         </div>
       </div>
@@ -67,6 +74,13 @@
             />
           </template>
           
+          <!-- 回测模式 -->
+          <template v-else-if="viewMode === 'backtest'">
+            <FundBacktest 
+              :fundCode="selectedFundCode"
+            />
+          </template>
+
           <!-- 详情模式 -->
           <template v-else>
             <FundSearch @fund-selected="handleFundSelected" />
@@ -138,6 +152,7 @@ import FundDetail from './components/FundDetail.vue'
 import FundWatchlist from './components/FundWatchlist.vue'
 import FundComparison from './components/FundComparison.vue'
 import FundScreening from './components/FundScreening.vue'
+import FundBacktest from './components/FundBacktest.vue'
 
 export default {
   name: 'App',
@@ -146,7 +161,8 @@ export default {
     FundDetail,
     FundWatchlist,
     FundComparison,
-    FundScreening
+    FundScreening,
+    FundBacktest
   },
   setup() {
     const selectedFundCode = ref('')
@@ -154,8 +170,12 @@ export default {
     const viewMode = ref('detail') // 'detail', 'screening' 或 'compare'
     const compareFunds = ref([]) // 用于对比的基金列表
     
-    const handleFundSelected = (fundCode) => {
-      selectedFundCode.value = fundCode
+    const handleFundSelected = (fundOrCode) => {
+      if (fundOrCode && typeof fundOrCode === 'object') {
+        selectedFundCode.value = fundOrCode.CODE || fundOrCode.fund_code || fundOrCode.code
+      } else {
+        selectedFundCode.value = fundOrCode
+      }
     }
     
     // 从筛选页面查看基金详情
