@@ -52,6 +52,7 @@ class FundBasicInfo(Base):
     current_rate = Column(Float)                     # 当前费率
     min_subscription_amount = Column(String(50))     # 最低申购金额
     is_hb = Column(String(10))                       # 是否货币基金
+    return_1y = Column(Float)                        # 近1年收益率（用于排序）
     basic_json = Column(Text)                        # 完整基本信息JSON
     performance_json = Column(Text)                  # 业绩数据JSON (收益率)
     created_time = Column(DateTime, default=datetime.now)

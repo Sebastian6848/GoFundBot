@@ -181,7 +181,18 @@ def get_fund_detail(fund_code):
             basic_record.is_hb = basic_info.get('is_hb')
             basic_record.basic_json = _json_dumps(basic_info)
             basic_record.performance_json = _json_dumps(performance)
+            # 设置可排序的收益率字段
+            try:
+                basic_record.return_1y = float(performance.get('1_year_return')) if performance.get('1_year_return') else None
+            except (ValueError, TypeError):
+                basic_record.return_1y = None
         else:
+            # 解析收益率用于排序
+            return_1y_val = None
+            try:
+                return_1y_val = float(performance.get('1_year_return')) if performance.get('1_year_return') else None
+            except (ValueError, TypeError):
+                pass
             basic_record = FundBasicInfo(
                 fund_code=fund_code,
                 fund_name=basic_info.get('fund_name') or fund_code,
@@ -190,6 +201,7 @@ def get_fund_detail(fund_code):
                 current_rate=basic_info.get('current_rate'),
                 min_subscription_amount=basic_info.get('min_subscription_amount'),
                 is_hb=basic_info.get('is_hb'),
+                return_1y=return_1y_val,
                 basic_json=_json_dumps(basic_info),
                 performance_json=_json_dumps(performance)
             )
@@ -1066,20 +1078,30 @@ def _save_fund_data_to_db(db: Session, fund_code: str, data: dict):
     try:
         # 保存基本信息
         basic_info = data.get('basic_info', {})
+        performance = data.get('performance', {})
+        # 解析收益率用于排序
+        return_1y_val = None
+        try:
+            return_1y_val = float(performance.get('1_year_return')) if performance.get('1_year_return') else None
+        except (ValueError, TypeError):
+            pass
+        
         basic_record = db.query(FundBasicInfo).filter(FundBasicInfo.fund_code == fund_code).first()
         if basic_record:
             basic_record.fund_name = basic_info.get('fund_name', '')
             basic_record.fund_type = basic_info.get('fund_type', '')
+            basic_record.return_1y = return_1y_val
             basic_record.basic_json = _json_dumps(basic_info)
-            basic_record.performance_json = _json_dumps(data.get('performance', {}))
+            basic_record.performance_json = _json_dumps(performance)
             basic_record.updated_time = datetime.now()
         else:
             basic_record = FundBasicInfo(
                 fund_code=fund_code,
                 fund_name=basic_info.get('fund_name', ''),
                 fund_type=basic_info.get('fund_type', ''),
+                return_1y=return_1y_val,
                 basic_json=_json_dumps(basic_info),
-                performance_json=_json_dumps(data.get('performance', {}))
+                performance_json=_json_dumps(performance)
             )
             db.add(basic_record)
         
@@ -1726,6 +1748,7 @@ def query_screening_funds():
     sort_map = {
         'sharpe_ratio_1y': FundRiskMetrics.sharpe_ratio_1y,
         'sharpe_ratio_3y': FundRiskMetrics.sharpe_ratio_3y,
+        'return_1y': FundBasicInfo.return_1y,
         'volatility_1y': FundRiskMetrics.volatility_1y,
         'max_drawdown_1y': FundRiskMetrics.max_drawdown_1y,
         'calmar_ratio_1y': FundRiskMetrics.calmar_ratio_1y,

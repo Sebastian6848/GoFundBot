@@ -656,6 +656,64 @@ def update_fund_types_from_cache():
         conn.close()
 
 
+def migrate_add_return_1y():
+    """添加 return_1y 字段到 fund_basic_info 表并更新现有数据"""
+    if not os.path.exists(DB_PATH):
+        print(f"Database not found at {DB_PATH}")
+        return
+    
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    
+    try:
+        print("=" * 60)
+        print("添加 return_1y 字段并更新数据...")
+        print("=" * 60)
+        
+        # 检查字段是否已存在
+        cursor.execute("PRAGMA table_info(fund_basic_info)")
+        columns = [row[1] for row in cursor.fetchall()]
+        
+        if 'return_1y' not in columns:
+            print("添加 return_1y 字段...")
+            cursor.execute("ALTER TABLE fund_basic_info ADD COLUMN return_1y FLOAT")
+        else:
+            print("return_1y 字段已存在")
+        
+        # 从 performance_json 中提取 1_year_return 并更新 return_1y
+        print("更新 return_1y 数据...")
+        cursor.execute("SELECT fund_code, performance_json FROM fund_basic_info WHERE performance_json IS NOT NULL")
+        rows = cursor.fetchall()
+        
+        updated = 0
+        for fund_code, perf_json in rows:
+            try:
+                perf = json.loads(perf_json) if perf_json else {}
+                return_1y = perf.get('1_year_return')
+                if return_1y is not None:
+                    try:
+                        return_1y_float = float(return_1y)
+                        cursor.execute(
+                            "UPDATE fund_basic_info SET return_1y = ? WHERE fund_code = ?",
+                            (return_1y_float, fund_code)
+                        )
+                        updated += 1
+                    except (ValueError, TypeError):
+                        pass
+            except json.JSONDecodeError:
+                pass
+        
+        conn.commit()
+        print(f"已更新 {updated} 条记录的 return_1y 字段")
+        print("迁移完成！")
+        
+    except Exception as e:
+        print(f"Error during migration: {str(e)}")
+        conn.rollback()
+    finally:
+        conn.close()
+
+
 if __name__ == '__main__':
     import sys
     
@@ -688,6 +746,9 @@ if __name__ == '__main__':
             update_fund_types_from_cache()
             recalculate_all_rankings()
             print_data_stats()
+        elif command == 'add-return':
+            # 添加 return_1y 字段
+            migrate_add_return_1y()
         else:
             print(f"未知命令: {command}")
             print("可用命令:")
@@ -699,6 +760,7 @@ if __name__ == '__main__':
             print("  stats        - 查看数据统计")
             print("  all          - 执行完整修复流程")
             print("  fix-rank     - 修复排名（更新类型+重算排名）")
+            print("  add-return   - 添加return_1y字段用于排序")
     else:
         # 默认执行迁移
         migrate_database()
@@ -710,3 +772,4 @@ if __name__ == '__main__':
         print("  python migrate_db.py stats       - 查看数据统计")
         print("  python migrate_db.py all         - 执行完整修复流程")
         print("  python migrate_db.py fix-rank    - 修复排名数据")
+        print("  python migrate_db.py add-return  - 添加return_1y字段")
