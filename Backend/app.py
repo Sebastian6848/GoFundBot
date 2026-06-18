@@ -105,7 +105,7 @@ def _build_cached_response(db: Session, fund_code: str):
 
     return data
 
-@app.route('/')
+@app.route('/api')
 def hello():
     """测试接口是否可用"""
     return jsonify({"message": "Fund Analysis API is running!"})

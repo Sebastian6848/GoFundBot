@@ -171,6 +171,41 @@ npm run dev
 
 启动成功后，访问终端显示的本地地址（通常为 `http://localhost:5173`）。
 
+#### 方式三：Docker Compose 部署
+
+生产部署时后端会托管前端静态文件。先构建前端，并将产物复制到 `Backend/static`：
+
+```bash
+cd Frontend
+npm ci
+npm run build
+rm -rf ../Backend/static
+mkdir -p ../Backend/static
+cp -a dist/. ../Backend/static/
+```
+
+然后在 `Backend` 目录准备 `.env` 并启动容器：
+
+```bash
+cd ../Backend
+cp .env.example .env
+# 编辑 .env，填写 LLM_API_KEY；不使用 AI 功能可留空
+mkdir -p Data
+GOFUNDBOT_UID=$(id -u) GOFUNDBOT_GID=$(id -g) docker compose up -d --build
+```
+
+启动后访问：
+
+```text
+http://服务器IP:5000/
+```
+
+健康检查接口：
+
+```text
+http://服务器IP:5000/api
+```
+
 
 
 ## 📂 项目结构
