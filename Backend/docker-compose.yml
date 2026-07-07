@@ -1,11 +1,18 @@
   services:
     backend:
-      container_name: gofundbot
+      container_name: gofundbot_backend
       image: jianboy/gofundbot:latest
       volumes:
         - ./Data:/app/Data
       ports:
         - 5000:5000
+      restart: always
+
+    gofundbot_dataserivce:
+      container_name: gofundbot_dataserivce
+      image: jianboy/gofundbot_dataservice:latest
+      ports:
+        - 3100:3100
       restart: always
 
   volumes:
